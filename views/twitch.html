@@ -1,0 +1,16 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Twitch Authentication</title>
+  <script>
+    var xhr = new XMLHttpRequest()
+    xhr.open("POST", "http://localhost:8080/twitch", true)
+    xhr.setRequestHeader("Content-Type", "application/json; charset=UTF-8")
+    xhr.send(JSON.stringify(window.location.href))
+  </script>
+</head>
+<body>
+</body>
+</html>
