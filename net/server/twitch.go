@@ -31,8 +31,8 @@ func NewTwitchAuthServer(channel chan string) *TwitchAuthServer {
 	twitchAuthServer := new(TwitchAuthServer)
 	twitchAuthServer.Channel = channel
 	serveMux := http.NewServeMux()
-	serveMux.HandleFunc("/twitch", twitchAuthServer.TwitchAuthorization)
 	serveMux.HandleFunc("/token", twitchAuthServer.TokenRetrieval)
+	serveMux.HandleFunc("/twitch", twitchAuthServer.TwitchAuthorization)
 	server := new(http.Server)
 	server.Addr = ":8080"
 	server.Handler = serveMux
@@ -54,8 +54,8 @@ func (tas *TwitchAuthServer) Authenticate() error {
 	query.Add("response_type", ResponseType)
 	query.Add("scope", Scope)
 	query.Add("state", url.QueryEscape(tas.State))
-	url := twitch.Endpoint.AuthURL + "?" + query.Encode()
-	tas.RedirectToURL(url)
+	href := twitch.Endpoint.AuthURL + "?" + query.Encode()
+	tas.RedirectToURL(href)
 	return nil
 }
 
@@ -75,8 +75,8 @@ func (tas *TwitchAuthServer) ListenAndServe() error {
 	return nil
 }
 
-func (tas *TwitchAuthServer) RedirectToURL(s string) error {
-	if err := exec.OpenBrowser(s); err != nil {
+func (tas *TwitchAuthServer) RedirectToURL(url string) error {
+	if err := exec.OpenBrowser(url); err != nil {
 		return err
 	}
 

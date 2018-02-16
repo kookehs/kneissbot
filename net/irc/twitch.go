@@ -16,8 +16,8 @@ type Session struct {
 	Websocket *websocket.Conn
 }
 
-func NewSession(o, u string) (*Session, error) {
-	ws, err := websocket.Dial(u, "", o)
+func NewSession(origin, url string) (*Session, error) {
+	ws, err := websocket.Dial(url, "", origin)
 
 	if err != nil {
 		return nil, err
