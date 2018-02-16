@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/base64"
 	"io"
@@ -18,7 +19,10 @@ const (
 	ClientID     = "2qt0hvdtidd4o2p7r0ndjajnawb080"
 	RedirectURI  = "http://localhost:8080/twitch"
 	ResponseType = "token"
-	Scope        = "chat_login"
+)
+
+var (
+	Scopes = []string{"channel_check_subscription", "channel_subscriptions", "chat_login", "communities_moderate"}
 )
 
 type TwitchAuthServer struct {
@@ -48,15 +52,30 @@ func (tas *TwitchAuthServer) Authenticate() error {
 	}
 
 	tas.State = base64.StdEncoding.EncodeToString(key)
+	query := tas.BuildQuery()
+	href := twitch.Endpoint.AuthURL + "?" + query.Encode()
+	tas.RedirectToURL(href)
+	return nil
+}
+
+func (tas *TwitchAuthServer) BuildQuery() url.Values {
 	query := make(url.Values)
 	query.Add("client_id", ClientID)
 	query.Add("redirect_uri", RedirectURI)
 	query.Add("response_type", ResponseType)
-	query.Add("scope", Scope)
+	var scopes bytes.Buffer
+
+	for i, v := range Scopes {
+		if i != 0 {
+			scopes.WriteByte(' ')
+		}
+
+		scopes.WriteString(v)
+	}
+
+	query.Add("scope", scopes.String())
 	query.Add("state", url.QueryEscape(tas.State))
-	href := twitch.Endpoint.AuthURL + "?" + query.Encode()
-	tas.RedirectToURL(href)
-	return nil
+	return query
 }
 
 func (tas *TwitchAuthServer) Close() error {
