@@ -59,10 +59,6 @@ func (tas *TwitchAuthServer) Authenticate() error {
 }
 
 func (tas *TwitchAuthServer) BuildQuery() url.Values {
-	query := make(url.Values)
-	query.Add("client_id", ClientID)
-	query.Add("redirect_uri", RedirectURI)
-	query.Add("response_type", ResponseType)
 	var scopes bytes.Buffer
 
 	for i, v := range Scopes {
@@ -73,6 +69,10 @@ func (tas *TwitchAuthServer) BuildQuery() url.Values {
 		scopes.WriteString(v)
 	}
 
+	query := make(url.Values)
+	query.Add("client_id", ClientID)
+	query.Add("redirect_uri", RedirectURI)
+	query.Add("response_type", ResponseType)
 	query.Add("scope", scopes.String())
 	query.Add("state", url.QueryEscape(tas.State))
 	return query
