@@ -7,15 +7,20 @@ import (
 )
 
 const (
+	// Max message length as specified by RFC1459
 	MaxMessageSize = 512
 )
 
+// Session contains variables required to interact with the IRC server
+// over a websocket connection.
 type Session struct {
 	In        chan []byte
 	Out       chan []byte
 	Websocket *websocket.Conn
 }
 
+// NewSession creates and initializes a Session connected to the
+// given URL.
 func NewSession(origin, url string) (*Session, error) {
 	ws, err := websocket.Dial(url, "", origin)
 
@@ -30,15 +35,18 @@ func NewSession(origin, url string) (*Session, error) {
 	}, nil
 }
 
+// Close forcefully shuts down the underlying websocket connection.
 func (s *Session) Close() error {
 	return s.Websocket.Close()
 }
 
+// Connect sends the given credentials to the IRC server for authentication.
 func (s *Session) Connect(nick, token string) {
 	s.Out <- []byte("PASS oauth:" + token)
 	s.Out <- []byte("NICK " + nick)
 }
 
+// Read sends any incoming message from the IRC server to the In channel.
 func (s *Session) Read() {
 	for {
 		message := make([]byte, MaxMessageSize)
@@ -53,11 +61,13 @@ func (s *Session) Read() {
 	}
 }
 
+// Start creates additional goroutines for reading and writing to the IRC server.
 func (s *Session) Start() {
 	go s.Read()
 	go s.Write()
 }
 
+// Write sends any outgoing message from the Out channel to the IRC server.
 func (s *Session) Write() {
 	for {
 		select {

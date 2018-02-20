@@ -6,6 +6,7 @@ import (
 	"runtime"
 )
 
+// OpenBrowser opens the given URL with the user's default browser.
 func OpenBrowser(url string) error {
 	switch runtime.GOOS {
 	case "darwin":

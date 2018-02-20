@@ -16,11 +16,15 @@ const (
 	GetUsers  = "https://api.twitch.tv/helix/users"
 )
 
+// API is a structure used to communicate with the Twitch API. Stores the
+// access token as well as a http.Client.
 type API struct {
 	Client *http.Client
 	Token  string
 }
 
+// NewAPI creates and initilaizes an API. NewAPI accepts an access token
+// as its parameter.
 func NewAPI(token string) *API {
 	return &API{
 		Client: new(http.Client),
@@ -28,6 +32,7 @@ func NewAPI(token string) *API {
 	}
 }
 
+// AuthType returns appropriate authorization type based on given URL.
 func AuthType(url string) string {
 	if strings.Contains(url, "helix") {
 		return "Bearer"
@@ -36,6 +41,8 @@ func AuthType(url string) string {
 	return "OAuth"
 }
 
+// Get sends a GET request to the specified URL returning the body
+// as bytes or an error.
 func (a *API) Get(url string) ([]byte, error) {
 	if valid, err := a.ValidToken(); !valid || err != nil {
 		if !valid {
@@ -64,6 +71,9 @@ func (a *API) Get(url string) ([]byte, error) {
 	return body, nil
 }
 
+// GetUsers returns a UserResponse with the supplied arguments.
+// If no arguments are given, then the user to which the access
+// token belongs to is returned.
 func (a *API) GetUsers(id, login []string) (*UsersResponse, error) {
 	query := make(url.Values)
 
@@ -91,6 +101,8 @@ func (a *API) GetUsers(id, login []string) (*UsersResponse, error) {
 	return resp, nil
 }
 
+// ValidToken sends a request to the root URL to check if access
+// token is still valid. Tokens must be validated before each request.
 func (a *API) ValidToken() (bool, error) {
 	req, err := http.NewRequest(http.MethodGet, KrakenAPI, nil)
 
