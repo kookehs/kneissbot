@@ -16,13 +16,16 @@ import (
 )
 
 const (
-	// Values retrieved from Twitch Apps
-	ClientID     = "2qt0hvdtidd4o2p7r0ndjajnawb080"
-	RedirectURI  = "http://localhost:8080/twitch"
+	// ClientID is provided by Twitch
+	ClientID = "2qt0hvdtidd4o2p7r0ndjajnawb080"
+	// RedirectURI should match the URL entered when registering app on Twitch
+	RedirectURI = "http://localhost:8080/twitch"
+	// ResponseType must be token for OAuth 2 Implicit Code Flow
 	ResponseType = "token"
 )
 
 var (
+	// Scopes based on requirements of the app
 	Scopes = []string{"channel_check_subscription", "channel_subscriptions", "chat_login", "communities_moderate"}
 )
 
@@ -61,8 +64,7 @@ func (tas *TwitchAuthServer) Authenticate() error {
 	tas.State = base64.StdEncoding.EncodeToString(key)
 	query := tas.BuildQuery()
 	href := twitch.Endpoint.AuthURL + "?" + query.Encode()
-	tas.RedirectToURL(href)
-	return nil
+	return tas.RedirectToURL(href)
 }
 
 // BuildQuery constructs the query part of the URL
@@ -88,39 +90,31 @@ func (tas *TwitchAuthServer) BuildQuery() url.Values {
 
 // Close forcefully shuts down the underlying server.
 func (tas *TwitchAuthServer) Close() error {
-	if err := tas.Server.Close(); err != nil {
-		return err
-	}
-
-	return nil
+	return tas.Server.Close()
 }
 
 // ListenAndServe instructs the underlying server to begin listening
 // and handling requests.
 func (tas *TwitchAuthServer) ListenAndServe() error {
-	if err := tas.Server.ListenAndServe(); err != nil {
-		return err
-	}
-
-	return nil
+	return tas.Server.ListenAndServe()
 }
 
 // RedirectToURL opens the given URL with the user's default browser.
 func (tas *TwitchAuthServer) RedirectToURL(url string) error {
-	if err := exec.OpenBrowser(url); err != nil {
-		return err
-	}
-
-	return nil
+	return exec.OpenBrowser(url)
 }
 
 // TokenRetrieval checks the state variable and extracts the
 // access token from the URL.
 func (tas *TwitchAuthServer) TokenRetrieval(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
-	r.Body.Close()
 
 	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	if err = r.Body.Close(); err != nil {
 		log.Println(err)
 		return
 	}

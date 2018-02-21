@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	// Max message length as specified by RFC1459
+	// MaxMessageSize is a fixed message length as specified by RFC1459
 	MaxMessageSize = 512
 )
 
@@ -70,13 +70,11 @@ func (s *Session) Start() {
 // Write sends any outgoing message from the Out channel to the IRC server.
 func (s *Session) Write() {
 	for {
-		select {
-		case message := <-s.Out:
-			log.Println("out: " + string(message))
+		message := <-s.Out
+		log.Println("out: " + string(message))
 
-			if _, err := s.Websocket.Write(message); err != nil {
-				log.Println(err)
-			}
+		if _, err := s.Websocket.Write(message); err != nil {
+			log.Println(err)
 		}
 	}
 }

@@ -11,9 +11,12 @@ import (
 )
 
 const (
-	HelixAPI  = "https://api.twitch.tv/helix"
+	// HelixAPI is the root URL for the Helix API
+	HelixAPI = "https://api.twitch.tv/helix"
+	// KrakenAPI is the root URL for the Kraken API
 	KrakenAPI = "https://api.twitch.tv/kraken"
-	GetUsers  = "https://api.twitch.tv/helix/users"
+	// GetUsers is the endpoint for retrieving user information
+	GetUsers = "https://api.twitch.tv/helix/users"
 )
 
 // API is a structure used to communicate with the Twitch API. Stores the
@@ -66,7 +69,14 @@ func (a *API) Get(url string) ([]byte, error) {
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
+
+	if err != nil {
+		return nil, err
+	}
+
+	if err = resp.Body.Close(); err != nil {
+		return nil, err
+	}
 
 	return body, nil
 }
@@ -120,10 +130,13 @@ func (a *API) ValidToken() (bool, error) {
 	decoder := json.NewDecoder(resp.Body)
 	token := new(TokenResponse)
 	err = decoder.Decode(token)
-	resp.Body.Close()
 
 	if err != nil {
-		return false, nil
+		return false, err
+	}
+
+	if err = resp.Body.Close(); err != nil {
+		return false, err
 	}
 
 	return token.Token.Valid, nil

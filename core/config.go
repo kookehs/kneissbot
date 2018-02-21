@@ -18,13 +18,13 @@ func NewConfig() *Config {
 	}
 }
 
-// Deserialize decodes byte data encoded by gob to Config structure.
+// Deserialize decodes byte data encoded by gob.
 func (c *Config) Deserialize(r io.Reader) error {
 	decoder := gob.NewDecoder(r)
 	return decoder.Decode(c)
 }
 
-// Serialize encodes Config structure to byte data using gob.
+// Serialize encodes to byte data using gob.
 func (c *Config) Serialize(w io.Writer) error {
 	encoder := gob.NewEncoder(w)
 	return encoder.Encode(c)
