@@ -14,7 +14,7 @@ type Config struct {
 // to initialize a Config structure for storage of variables.
 func NewConfig() *Config {
 	return &Config{
-		Twitch: NewTwitchConfig(),
+		Twitch: &TwitchConfig{},
 	}
 }
 
@@ -28,4 +28,10 @@ func (c *Config) Deserialize(r io.Reader) error {
 func (c *Config) Serialize(w io.Writer) error {
 	encoder := gob.NewEncoder(w)
 	return encoder.Encode(c)
+}
+
+// TwitchConfig contains variables for Twitch related configurations.
+type TwitchConfig struct {
+	AccessToken string
+	Username    string
 }

@@ -28,6 +28,7 @@ func NewSession(origin, url string) (*Session, error) {
 		return nil, err
 	}
 
+	// TODO: Buffered channels.
 	return &Session{
 		In:        make(chan []byte),
 		Out:       make(chan []byte),
