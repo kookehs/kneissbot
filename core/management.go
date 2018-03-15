@@ -43,19 +43,34 @@ func NewManagement() *Management {
 // Take a conversative, slow approach to making people moderators.
 // DPoS will handle the quality of moderators.
 func (m *Management) Heuristic() int {
-	// Minimum number of moderators based on messages incoming.
-	baseline := float64(m.Messages) * m.Ratio
 	m.MovingAverage.Append(m.Score())
-	sma, ema := m.MovingAverage.Update()
+	// sma, ema, crossed := m.MovingAverage.Update()
+	// diff := math.Abs(sma - ema)
+
+	// if !crossed {
+	// 	return m.Moderators
+	// }
+
+	// switch m.MovingAverage.Signal {
+	// case -1:
+	// 	effectiveness := diff / float64(m.Moderators)
+	// 	mods := math.Log10(effectiveness)
+	// 	return m.Moderators - 1 - int(mods)
+	// case 0:
+	// 	// No action should be taken as we are unsure which way the trend will go.
+	// case 1:
+	// 	return m.Moderators + 1
+	// }
 
 	// TODO: Factor in the trend into number of moderators.
+	return -1
 }
 
-// Score quanitifies the effectiveness of moderators.
+// Score helps to quanitify the effectiveness of moderators.
 func (m *Management) Score() float64 {
-	// Count infractions relative to messages.
-	infractions := float64(m.Bans + m.Timeouts)
+	// Calculate infractions relative to messages.
 	score := float64(m.Messages)
+	infractions := float64(m.Bans + m.Timeouts)
 
 	if infractions > 0 {
 		score /= infractions
