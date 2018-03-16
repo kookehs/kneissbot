@@ -3,14 +3,14 @@ package core
 // MovingAverage contains logic related to a moving average.
 type MovingAverage struct {
 	EMAs   []float64
-	Period float64
+	Period int
 	Signal int
 	SMAs   []float64
 	Values []float64
 }
 
 // NewMovingAverage returns an initialized MovingAverage for storing values.
-func NewMovingAverage(period float64) *MovingAverage {
+func NewMovingAverage(period int) *MovingAverage {
 	return &MovingAverage{
 		EMAs:   make([]float64, 0),
 		Period: period,
@@ -21,8 +21,8 @@ func NewMovingAverage(period float64) *MovingAverage {
 }
 
 // Multiplier returns the multiplier used for EMA.
-func Multiplier(period float64) float64 {
-	return 2 / (period + 1)
+func Multiplier(period int) float64 {
+	return float64(2) / float64(period+1)
 }
 
 // Append adds to the slices of values.
@@ -69,16 +69,23 @@ func (ma *MovingAverage) EMA() float64 {
 func (ma *MovingAverage) SMA() float64 {
 	var sum float64
 	start := 0
+	length := len(ma.Values)
 
-	if len(ma.Values) > int(ma.Period) {
-		start = len(ma.Values) - int(ma.Period)
+	if length > ma.Period {
+		start = length - ma.Period
 	}
 
 	for _, value := range ma.Values[start:] {
 		sum += value
 	}
 
-	sma := sum / float64(ma.Period)
+	period := ma.Period
+
+	if length < period {
+		period = length
+	}
+
+	sma := sum / float64(period)
 	ma.SMAs = append(ma.SMAs, sma)
 	return sma
 }
