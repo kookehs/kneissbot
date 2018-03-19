@@ -22,7 +22,7 @@ type Message struct {
 	Command string
 	Params  []string
 	Prefix  Prefix
-	Tags    Tags
+	Tags    map[string]string
 }
 
 // MakeMessage creates a Message from the given string.
@@ -32,7 +32,7 @@ func MakeMessage(input string) Message {
 	message := Message{
 		Params: make([]string, 0),
 		Prefix: Prefix{},
-		Tags:   Tags{},
+		Tags:   make(map[string]string),
 	}
 
 	for i, v := range result {
@@ -76,14 +76,12 @@ type Prefix struct {
 	User string
 }
 
+// MakeTags creates a Tags from the given string.
 // Tags are the IRCv3 message tags.
 // <tags>	::= <tag> [';' <tag>]*
 // <tag>	::= <key> ['=' <escaped value>]
-type Tags map[string]string
-
-// MakeTags creates a Tags from the given string.
-func MakeTags(input string) Tags {
-	tags := Tags{}
+func MakeTags(input string) map[string]string {
+	tags := make(map[string]string)
 	pairs := strings.Split(input, ";")
 
 	for _, v := range pairs {

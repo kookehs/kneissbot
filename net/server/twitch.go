@@ -29,46 +29,46 @@ var (
 	Scopes = []string{"channel_check_subscription", "channel_subscriptions", "chat_login", "communities_moderate"}
 )
 
-// TwitchAuthServer contains variables need to set up an OAuth 2 connection
+// TwitchAuth contains variables need to set up an OAuth 2 connection
 // with the Twitch API.
-type TwitchAuthServer struct {
+type TwitchAuth struct {
 	Channel chan string
 	Server  *http.Server
 	State   string
 }
 
-// NewTwitchAuthServer creates and initializes a local server used to
+// NewTwitchAuth creates and initializes a local server used to
 // authorize an OAuth Implicit Code flow.
-func NewTwitchAuthServer(channel chan string) *TwitchAuthServer {
-	twitchAuthServer := new(TwitchAuthServer)
-	twitchAuthServer.Channel = channel
+func NewTwitchAuth(channel chan string) *TwitchAuth {
+	twitchAuth := new(TwitchAuth)
+	twitchAuth.Channel = channel
 	serveMux := http.NewServeMux()
-	serveMux.HandleFunc("/token", twitchAuthServer.TokenRetrieval)
-	serveMux.HandleFunc("/twitch", twitchAuthServer.TwitchAuthorization)
+	serveMux.HandleFunc("/token", twitchAuth.TokenRetrieval)
+	serveMux.HandleFunc("/twitch", twitchAuth.TwitchAuthorization)
 	server := new(http.Server)
 	server.Addr = ":8080"
 	server.Handler = serveMux
-	twitchAuthServer.Server = server
-	return twitchAuthServer
+	twitchAuth.Server = server
+	return twitchAuth
 }
 
 // Authenticate generates a state key and redirects the user to
 // Twitch's authorization page.
-func (tas *TwitchAuthServer) Authenticate() error {
+func (ta *TwitchAuth) Authenticate() error {
 	key := make([]byte, 64)
 
 	if _, err := io.ReadFull(rand.Reader, key[:]); err != nil {
 		return err
 	}
 
-	tas.State = base64.StdEncoding.EncodeToString(key)
-	query := tas.BuildQuery()
+	ta.State = base64.StdEncoding.EncodeToString(key)
+	query := ta.BuildQuery()
 	href := twitch.Endpoint.AuthURL + "?" + query.Encode()
-	return tas.RedirectToURL(href)
+	return ta.RedirectToURL(href)
 }
 
 // BuildQuery constructs the query part of the URL
-func (tas *TwitchAuthServer) BuildQuery() url.Values {
+func (ta *TwitchAuth) BuildQuery() url.Values {
 	var scopes bytes.Buffer
 
 	for i, v := range Scopes {
@@ -84,29 +84,29 @@ func (tas *TwitchAuthServer) BuildQuery() url.Values {
 	query.Add("redirect_uri", RedirectURI)
 	query.Add("response_type", ResponseType)
 	query.Add("scope", scopes.String())
-	query.Add("state", url.QueryEscape(tas.State))
+	query.Add("state", url.QueryEscape(ta.State))
 	return query
 }
 
 // Close forcefully shuts down the underlying server.
-func (tas *TwitchAuthServer) Close() error {
-	return tas.Server.Close()
+func (ta *TwitchAuth) Close() error {
+	return ta.Server.Close()
 }
 
 // ListenAndServe instructs the underlying server to begin listening
 // and handling requests.
-func (tas *TwitchAuthServer) ListenAndServe() error {
-	return tas.Server.ListenAndServe()
+func (ta *TwitchAuth) ListenAndServe() error {
+	return ta.Server.ListenAndServe()
 }
 
 // RedirectToURL opens the given URL with the user's default browser.
-func (tas *TwitchAuthServer) RedirectToURL(url string) error {
+func (ta *TwitchAuth) RedirectToURL(url string) error {
 	return exec.OpenBrowser(url)
 }
 
 // TokenRetrieval checks the state variable and extracts the
 // access token from the URL.
-func (tas *TwitchAuthServer) TokenRetrieval(w http.ResponseWriter, r *http.Request) {
+func (ta *TwitchAuth) TokenRetrieval(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 
 	if err != nil {
@@ -135,13 +135,13 @@ func (tas *TwitchAuthServer) TokenRetrieval(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if strings.Compare(tas.State, query["state"][0]) == 0 {
+	if strings.Compare(ta.State, query["state"][0]) == 0 {
 		token := fragment[strings.IndexByte(fragment, '=')+1:]
-		tas.Channel <- token
+		ta.Channel <- token
 	}
 }
 
 // TwitchAuthorization handles the Twitch redirect by serving a HTML file.
-func (tas *TwitchAuthServer) TwitchAuthorization(w http.ResponseWriter, r *http.Request) {
+func (ta *TwitchAuth) TwitchAuthorization(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "views/twitch.html")
 }

@@ -86,13 +86,9 @@ func (m *Management) Score() float64 {
 	score := float64(m.Messages)
 	// TODO: Add weights for bans and timeouts.
 	infractions := float64(m.Bans + m.Timeouts)
-
-	// TODO: Messages need a bigger weight.
-	if infractions > 0 {
-		score /= infractions
-	}
-
-	return score
+	// A few infractions should not bring the score down substantially.
+	adjustment := infractions / 2 * math.Log(infractions+1)
+	return score / adjustment
 }
 
 // Update updates variables and calculates the
