@@ -11,6 +11,7 @@ import (
 
 func main() {
 	output := make(chan string)
+	defer close(output)
 	twitchAuth := server.NewTwitchAuth(output)
 	go twitchAuth.ListenAndServe()
 
@@ -35,7 +36,7 @@ func main() {
 		panic("Unable to connect to IRC")
 	}
 
-	channel := "summit1g"
+	channel := "lirik"
 
 	if ok := twitchIRC.Join(channel); !ok {
 		panic("Unable to join IRC channel")
@@ -70,7 +71,11 @@ func main() {
 	// management := core.NewManagement()
 
 	// for {
+	// 	split := strings.Index(messages, "Z ")
+	// 	messages := messages[split+2:]
+	// 	individual := strings.Split(messages, "\n")
 	// 	var bans, messages int
+	// 	if strings.Contains(message, "@ban-duration") {}
 	// 	fmt.Scanf("%d %d\n", &messages, &bans)
 	// 	management.Bans = bans
 	// 	management.Messages = uint64(messages)

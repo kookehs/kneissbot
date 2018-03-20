@@ -3,6 +3,7 @@ package irc
 import (
 	"bytes"
 	"log"
+	"unicode/utf8"
 
 	"golang.org/x/net/websocket"
 )
@@ -13,6 +14,10 @@ const (
 
 	// MaxMessageSize is a fixed message length as specified by RFC1459
 	MaxMessageSize = 512
+
+	// MaxTwitchMessageSize is the fixed message length.
+	// Twitch has a 500 character limit not a 512 byte limit not including line endings.
+	MaxTwitchMessageSize = 512 * utf8.UTFMax
 
 	// Capabilities
 	Commands   = "twitch.tv/commands"
@@ -54,6 +59,8 @@ func (t *Twitch) Cap(capabilities []string) {
 
 // Close forcefully shuts down the underlying websocket connection.
 func (t *Twitch) Close() error {
+	close(t.In)
+	close(t.Out)
 	return t.Websocket.Close()
 }
 
@@ -85,12 +92,14 @@ func (t *Twitch) Connect(nick, token string) bool {
 
 // HandleCommands handles all incoming commands.
 func (t *Twitch) HandleCommands() {
+	// TODO: Figure out why this isn't handling all commands.
 	for {
 		in := <-t.In
 		message := MakeMessage(string(in))
 
 		switch message.Command {
 		case "PING":
+			log.Println("got a ping")
 			t.Out <- []byte("PONG :tmi.twitch.tv")
 		}
 	}
@@ -130,7 +139,7 @@ func (t *Twitch) PrivMSG(channel, message string) {
 // Read sends any incoming message from the IRC server to the In channel.
 func (t *Twitch) Read() {
 	for {
-		buffer := make([]byte, MaxMessageSize)
+		buffer := make([]byte, MaxTwitchMessageSize)
 		_, err := t.Websocket.Read(buffer)
 
 		if err != nil {
@@ -142,6 +151,7 @@ func (t *Twitch) Read() {
 
 		for _, message := range messages {
 			if len(message) > 0 {
+				// TODO: Handle EOF.
 				log.Println("in: " + string(message))
 				t.In <- message
 			}
