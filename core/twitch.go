@@ -29,8 +29,9 @@ func init() {
 
 // Twitch contains logic realted to both the API and IRC.
 type Twitch struct {
-	Event   chan string
-	Session *irc.Session
+	Event      chan string
+	Management *Management
+	Session    *irc.Session
 }
 
 // NewTwitch returns a pointer to an initialized Twitch struct.
@@ -42,8 +43,9 @@ func NewTwitch() (*Twitch, error) {
 	}
 
 	return &Twitch{
-		Event:   make(chan string),
-		Session: session,
+		Event:      make(chan string),
+		Management: NewManagement(),
+		Session:    session,
 	}, nil
 }
 
@@ -108,12 +110,14 @@ func (t *Twitch) In(input []byte) {
 	case irc.RPL_YOURHOST:
 	case "CAP":
 	case "CLEARCHAT":
+		t.Management.Bans++
 	case "JOIN":
 	case "MODE":
 	case "PART":
 	case "PING":
 		t.Session.Write("PONG :tmi.twitch.tv")
 	case "PRIVMSG":
+		t.Management.Messages++
 	case "USERNOTICE":
 	default:
 		log.Printf("Unknown command: %v", message.Command)
@@ -148,5 +152,6 @@ func (t *Twitch) PrivMSG(channel, message string) {
 
 // Start creates additional goroutines for reading from the IRC server.
 func (t *Twitch) Start() {
+	go t.Management.Update()
 	go t.Session.Listen(t)
 }

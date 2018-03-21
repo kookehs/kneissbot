@@ -3,6 +3,7 @@ package core
 import (
 	"log"
 	"math"
+	"time"
 
 	watchmen "github.com/kookehs/watchmen/core"
 )
@@ -12,8 +13,9 @@ const DefaultModerators = 3
 
 // Management handles logic related to dynamically managing moderators.
 type Management struct {
-	// Magement variables
+	// Management variables
 	MovingAverage *MovingAverage
+	Timer         *time.Timer
 
 	// Twitch related variables
 	Bans       int
@@ -40,6 +42,7 @@ func NewManagement() *Management {
 		Moderators:    DefaultModerators,
 		MovingAverage: ma,
 		Node:          node,
+		Timer:         time.NewTimer(10 * time.Second),
 	}
 }
 
@@ -54,7 +57,8 @@ func (m *Management) Heuristic() int {
 	mods := float64(m.Moderators)
 	multiplier := 1.0
 
-	log.Printf("EMA: %v, SMA: %v, Signal: %v", ema, sma, m.MovingAverage.Signal)
+	// TODO: Figure out why values aren't correct.
+	log.Printf("[Management]: EMA - %v, SMA - %v, Signal - %v", ema, sma, m.MovingAverage.Signal)
 
 	switch m.MovingAverage.Signal {
 	case -1:
@@ -91,8 +95,16 @@ func (m *Management) Score() float64 {
 	return score / adjustment
 }
 
-// Update updates variables and calculates the
-// number of moderators based on the heuristic.
+// Update updates variables and resets counters.
+// Update should be called as a goroutine.
 func (m *Management) Update() {
-	m.Moderators = m.Heuristic()
+	for {
+		<-m.Timer.C
+		m.Moderators = m.Heuristic()
+		log.Printf("[Management]: Mods - %v", m.Moderators)
+		m.Bans = 0
+		m.Messages = 0
+		m.Timeouts = 0
+		m.Timer.Reset(10 * time.Second)
+	}
 }
