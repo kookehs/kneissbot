@@ -30,7 +30,7 @@ func main() {
 		panic("Unable to connect to IRC")
 	}
 
-	channel := "lirik"
+	channel := "loltyler1"
 
 	if ok := twitch.Join(channel); !ok {
 		panic("Unable to join IRC channel")
