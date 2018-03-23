@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bufio"
+	"os"
+
 	"github.com/kookehs/kneissbot/core"
 	"github.com/kookehs/kneissbot/net/server"
 )
@@ -30,7 +33,12 @@ func main() {
 		panic("Unable to connect to IRC")
 	}
 
-	channel := "loltyler1"
+	reader := bufio.NewReader(os.Stdin)
+	channel, err := reader.ReadString('\n')
+
+	if err != nil {
+		panic(err)
+	}
 
 	if ok := twitch.Join(channel); !ok {
 		panic("Unable to join IRC channel")

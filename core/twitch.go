@@ -2,6 +2,7 @@ package core
 
 import (
 	"log"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/kookehs/kneissbot/net/irc"
@@ -110,7 +111,11 @@ func (t *Twitch) In(input []byte) {
 	case irc.RPL_YOURHOST:
 	case "CAP":
 	case "CLEARCHAT":
-		t.Management.Bans++
+		if strings.Compare(message.Tags["ban-duration"], "") == 0 {
+			t.Management.Bans++
+		} else {
+			t.Management.Timeouts++
+		}
 	case "JOIN":
 	case "MODE":
 	case "PART":

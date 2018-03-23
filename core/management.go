@@ -11,6 +11,9 @@ import (
 // DefaultModerators is the default number of moderators.
 const DefaultModerators = 3
 
+// UpdateInterval is the time in seconds for an update to trigger.
+var UpdateInterval time.Duration = 60
+
 // Management handles logic related to dynamically managing moderators.
 type Management struct {
 	// Management variables
@@ -42,7 +45,7 @@ func NewManagement() *Management {
 		Moderators:    DefaultModerators,
 		MovingAverage: ma,
 		Node:          node,
-		Timer:         time.NewTimer(10 * time.Second),
+		Timer:         time.NewTimer(UpdateInterval * time.Second),
 	}
 }
 
@@ -57,7 +60,6 @@ func (m *Management) Heuristic() int {
 	mods := float64(m.Moderators)
 	multiplier := 1.0
 
-	// TODO: Figure out why values aren't correct.
 	log.Printf("[Management]: EMA - %v, SMA - %v, Signal - %v", ema, sma, m.MovingAverage.Signal)
 
 	switch m.MovingAverage.Signal {
@@ -72,15 +74,16 @@ func (m *Management) Heuristic() int {
 	case 1:
 		// A higher sma than ema indicates a bad trend.
 		// Take a slow approach as the spread grows.
-		multiplier = math.Pow(effectiveness, 1/4) + 1
-	}
-
-	if mods *= multiplier; mods < DefaultModerators {
-		mods = DefaultModerators
+		multiplier = 1.5 / (1 + math.Exp(-effectiveness+4))
 	}
 
 	// Baseline number of moderators based on incoming messages.
-	mods += float64(m.Messages) / 16
+	activity := float64(m.Messages) / 8
+	mods = mods*multiplier + activity
+
+	if mods < DefaultModerators {
+		mods = DefaultModerators
+	}
 
 	// Truncate value to avoid rounding up in order to not overestimate.
 	return int(mods)
@@ -96,7 +99,6 @@ func (m *Management) Score() float64 {
 	// A few infractions should not bring the score down substantially.
 	adjustment := math.Pow(infractions/2, 2)
 	score -= adjustment
-	log.Printf("[Management]: Score - %v", score)
 	return score
 }
 
@@ -106,11 +108,11 @@ func (m *Management) Update() {
 	for {
 		<-m.Timer.C
 		m.Moderators = m.Heuristic()
-		log.Printf("[Management]: Messages - %v, Bans - %v", m.Messages, m.Bans)
+		log.Printf("[Management]: Messages - %v, Bans - %v, Timeouts - %v", m.Messages, m.Bans, m.Timeouts)
 		log.Printf("[Management]: Mods - %v", m.Moderators)
 		m.Bans = 0
 		m.Messages = 0
 		m.Timeouts = 0
-		m.Timer.Reset(10 * time.Second)
+		m.Timer.Reset(UpdateInterval * time.Second)
 	}
 }
