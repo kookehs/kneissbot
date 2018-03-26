@@ -39,6 +39,20 @@ func NewManagement() *Management {
 	ma := NewMovingAverage(10)
 	node := watchmen.NewNode(dpos, ledger)
 
+	// TOOD: Figure out distribution model.
+	// NOTE: Distribute balance of genesis delegates.
+	// NOTE: Use streamer's username as genesis account. Let them distribute.
+	// NOTE: Generation of tokens through transactions.
+	// NOTE: Acquisition of tokens through staking / receiving.
+	// NOTE: Incentivize beneficial chat activity.
+	genesis, err := ledger.OpenGenesisAccount("Genesis Account")
+
+	if err != nil {
+		panic(err)
+	}
+
+	ledger.OpenGenesisDelegates(dpos, genesis, node)
+
 	return &Management{
 		DPoS:          dpos,
 		Ledger:        ledger,

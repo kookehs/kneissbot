@@ -1,7 +1,6 @@
 package core
 
 import (
-	"log"
 	"strings"
 	"unicode/utf8"
 
@@ -14,16 +13,24 @@ const (
 	TwitchIRC    = "ws://irc-ws.chat.twitch.tv:80"
 
 	// Capabilities
-	Commands   = "twitch.tv/commands"
-	Membership = "twitch.tv/membership"
-	Tags       = "twitch.tv/tags"
+	CommandsCapability   = "twitch.tv/commands"
+	MembershipCapability = "twitch.tv/membership"
+	TagsCapability       = "twitch.tv/tags"
 )
 
 var (
-	DefaultCapabilities = []string{Commands, Membership, Tags}
+	Commands            = make(map[string]func(irc.Message, *Twitch))
+	DefaultCapabilities = []string{CommandsCapability, MembershipCapability, TagsCapability}
 )
 
 func init() {
+	// Set up mapping of commands to functions.
+	Commands["CLEARCHAT"] = ClearChat
+	Commands[irc.RPL_ENDOFMOTD] = EndOfMOTD
+	Commands[irc.RPL_ENDOFNAMES] = EndOfNames
+	Commands["PING"] = Ping
+	Commands["PRIVMSG"] = PrivMSG
+
 	// Twitch has a 500 character limit, not including line endings, not a 512 byte limit.
 	irc.MaxMessageSize = 512 * utf8.UTFMax
 }
@@ -48,6 +55,43 @@ func NewTwitch() (*Twitch, error) {
 		Management: NewManagement(),
 		Session:    session,
 	}, nil
+}
+
+// ClearChat is the handler for the CLEARCHAT command sent from IRC.
+func ClearChat(message irc.Message, twitch *Twitch) {
+	if strings.Compare(message.Tags["ban-duration"], "") == 0 {
+		twitch.Management.Bans++
+	} else {
+		twitch.Management.Timeouts++
+	}
+}
+
+// EndOfMOTD is the handler for the ENDOFMOTD command sent from IRC.
+func EndOfMOTD(message irc.Message, twitch *Twitch) {
+	twitch.Event <- message.Command
+}
+
+// EndOfNames is the handler for the ENDOFNAMES command sent from IRC.
+func EndOfNames(message irc.Message, twitch *Twitch) {
+	twitch.Event <- message.Command
+}
+
+// Ping is the handler for the PING command sent from IRC.
+func Ping(message irc.Message, twitch *Twitch) {
+	twitch.Session.Write("PONG :tmi.twitch.tv")
+}
+
+// PrivMSG is the handler for the PRIVMSG command sent from IRC.
+func PrivMSG(message irc.Message, twitch *Twitch) {
+	// TODO: Handle bot commands
+	username := message.Prefix.User
+
+	// TODO: Remove this temporary code.
+	if _, ok := twitch.Management.Ledger.Users[username]; !ok {
+		twitch.Management.Ledger.OpenAccount(twitch.Management.Node, username)
+	}
+
+	twitch.Management.Messages++
 }
 
 // Cap sends a request for the given capabilities.
@@ -94,38 +138,10 @@ func (t *Twitch) Connect(nick, token string) bool {
 
 // In handles all incoming messages.
 func (t *Twitch) In(input []byte) {
-	// TODO: Create a map[string]func for handling commands.
 	message := irc.MakeMessage(string(input))
 
-	switch message.Command {
-	case irc.RPL_CREATED:
-	case irc.RPL_ENDOFMOTD:
-		t.Event <- message.Command
-	case irc.RPL_ENDOFNAMES:
-		t.Event <- message.Command
-	case irc.RPL_MOTD:
-	case irc.RPL_MOTDSTART:
-	case irc.RPL_MYINFO:
-	case irc.RPL_NAMREPLY:
-	case irc.RPL_WELCOME:
-	case irc.RPL_YOURHOST:
-	case "CAP":
-	case "CLEARCHAT":
-		if strings.Compare(message.Tags["ban-duration"], "") == 0 {
-			t.Management.Bans++
-		} else {
-			t.Management.Timeouts++
-		}
-	case "JOIN":
-	case "MODE":
-	case "PART":
-	case "PING":
-		t.Session.Write("PONG :tmi.twitch.tv")
-	case "PRIVMSG":
-		t.Management.Messages++
-	case "USERNOTICE":
-	default:
-		log.Printf("Unknown command: %v", message.Command)
+	if callback, ok := Commands[message.Command]; ok {
+		callback(message, t)
 	}
 }
 
