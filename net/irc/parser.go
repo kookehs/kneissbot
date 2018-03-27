@@ -5,11 +5,11 @@ import (
 	"strings"
 )
 
-// Regular Expression for searching
+// Regular Expressions for searching
 const (
 	CommandFormat = `(?:(?P<Command>[a-zA-Z]+)|(?P<Command>\d{3}))`
-	ParamFormat   = `(?P<Params>\s(?:(?P<Trailing>:.*)|(?P<Middle>[^:]\w+)))*`
-	PrefixFormat  = `(?P<Prefix>:(?P<Name>\S+?)(?:!(?P<User>\S+?))?(?:@(?P<Host>\S+?))?\s)?`
+	ParamFormat   = `(?P<Params>\s(?::(?P<Trailing>.*)|(?P<Middle>[^:]\w+)))*`
+	PrefixFormat  = `:(?P<Prefix>(?P<Name>\S+?)(?:!(?P<User>\S+?))?(?:@(?P<Host>\S+?))?\s)?`
 	TagFormat     = `(?:@(?P<Tags>\S+)\s)?`
 )
 

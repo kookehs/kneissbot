@@ -1,5 +1,7 @@
 package core
 
+// TODO: Store values at certain tick intervals and calculate values for a period.
+
 // MovingAverage contains logic related to a moving average.
 type MovingAverage struct {
 	EMAs   []float64

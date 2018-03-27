@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"os"
 
+	"github.com/kookehs/kneissbot/api/twitch"
 	"github.com/kookehs/kneissbot/core"
 	"github.com/kookehs/kneissbot/net/server"
 )
@@ -20,16 +21,28 @@ func main() {
 
 	defer twitchAuth.Close()
 	token := <-output
-	twitch, err := core.NewTwitch()
+	api := twitch.NewAPI(token)
+	response, err := api.ValidToken()
+
+	if err != nil || !response.Token.Valid {
+		if !response.Token.Valid {
+			panic("Invalid token")
+		}
+
+		panic(err)
+	}
+
+	username := response.Token.Username
+	bot, err := core.NewBot(username)
 
 	if err != nil {
 		panic(err)
 	}
 
-	defer twitch.Close()
-	twitch.Start()
+	defer bot.Close()
+	bot.Start()
 
-	if ok := twitch.Connect("kneissbot", token); !ok {
+	if ok := bot.Connect(username, token); !ok {
 		panic("Unable to connect to IRC")
 	}
 
@@ -40,10 +53,10 @@ func main() {
 		panic(err)
 	}
 
-	if ok := twitch.Join(channel); !ok {
+	if ok := bot.Join(channel); !ok {
 		panic("Unable to join IRC channel")
 	}
 
-	twitch.Cap(core.DefaultCapabilities)
+	bot.Cap(nil)
 	select {}
 }

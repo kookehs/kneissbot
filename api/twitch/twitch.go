@@ -47,9 +47,9 @@ func AuthType(url string) string {
 // Get sends a GET request to the specified URL returning the body
 // as bytes or an error.
 func (a *API) Get(url string) ([]byte, error) {
-	if valid, err := a.ValidToken(); !valid || err != nil {
-		if !valid {
-			return nil, errors.New("invalid token")
+	if response, err := a.ValidToken(); err != nil || !response.Token.Valid {
+		if !response.Token.Valid {
+			return nil, errors.New("Invalid token")
 		}
 
 		return nil, err
@@ -113,31 +113,31 @@ func (a *API) GetUsers(id, login []string) (*UsersResponse, error) {
 
 // ValidToken sends a request to the root URL to check if access
 // token is still valid. Tokens must be validated before each request.
-func (a *API) ValidToken() (bool, error) {
+func (a *API) ValidToken() (*TokenResponse, error) {
 	req, err := http.NewRequest(http.MethodGet, KrakenAPI, nil)
 
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	req.Header.Add("Authorization", AuthType(KrakenAPI)+" "+a.Token)
 	resp, err := a.Client.Do(req)
 
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	decoder := json.NewDecoder(resp.Body)
-	token := new(TokenResponse)
-	err = decoder.Decode(token)
+	response := new(TokenResponse)
+	err = decoder.Decode(response)
 
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	if err = resp.Body.Close(); err != nil {
-		return false, err
+		return nil, err
 	}
 
-	return token.Token.Valid, nil
+	return response, nil
 }

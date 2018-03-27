@@ -33,7 +33,7 @@ type Management struct {
 }
 
 // NewManagement creates and initializes a new Management.
-func NewManagement() *Management {
+func NewManagement(username string) *Management {
 	dpos := watchmen.NewDPoS()
 	ledger := watchmen.NewLedger()
 	ma := NewMovingAverage(10)
@@ -45,13 +45,10 @@ func NewManagement() *Management {
 	// NOTE: Generation of tokens through transactions.
 	// NOTE: Acquisition of tokens through staking / receiving.
 	// NOTE: Incentivize beneficial chat activity.
-	genesis, err := ledger.OpenGenesisAccount("Genesis Account")
 
-	if err != nil {
+	if _, err := ledger.OpenGenesisAccount(username); err != nil {
 		panic(err)
 	}
-
-	ledger.OpenGenesisDelegates(dpos, genesis, node)
 
 	return &Management{
 		DPoS:          dpos,
