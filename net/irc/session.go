@@ -21,6 +21,7 @@ const (
 	RPL_ENDOFMOTD  = "376"
 )
 
+// TODO: Add rate limiting settings.
 var (
 	// MaxMessageSize is a fixed message length in bytes as specified by RFC1459
 	MaxMessageSize = 512

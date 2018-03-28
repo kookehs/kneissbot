@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"log"
 	"regexp"
 	"strconv"
@@ -12,17 +13,30 @@ import (
 	"github.com/kookehs/watchmen/primitives"
 )
 
+// TODO: Blacklist of users (never moderator)
+// TODO: Whitelist of users (always moderator?)
+// TODO: Handle making people moderators / not moderators
+
 const (
+	// BalanceFormat defines the search pattern for retrieving users' balances.
+	BalanceFormat = `!balance ((?:\w+ ?)*)`
 	// CommandFormat defines the search pattern for a command.
 	CommandFormat = `!(\w+)`
-	SendFormat    = `!send (\w+) (\d+)`
+	// SendFormat defines the search pattern for sending funds to another user.
+	SendFormat = `!send (\w+) (\d+)`
+	// VoteFormat defines the search pattern for voting for delegates.
+	VoteFormat = `!vote ((?:[+|-]\w+ ?)+)`
 )
 
 var (
+	// BalanceRegExp is the regular expression used to find balance(s) for given user(s).
+	BalanceRegExp = regexp.MustCompile(BalanceFormat)
 	// CommandRegExp is the regular expression used to find commands.
 	CommandRegExp = regexp.MustCompile(CommandFormat)
 	// SendRegExp is the regular expression used to find the receiver.
 	SendRegExp = regexp.MustCompile(SendFormat)
+	// VoteRegExp is the regular expression used to find the delegates elected.
+	VoteRegExp = regexp.MustCompile(VoteFormat)
 
 	// BotCommands is a mapping of strings to functions related to the bot.
 	BotCommands = make(map[string]func(*Bot, irc.Message))
@@ -32,7 +46,7 @@ var (
 
 func init() {
 	// Set up mapping of commands to functions.
-	BotCommands["balance"] = Register
+	BotCommands["balance"] = Balance
 	BotCommands["register"] = Register
 	BotCommands["send"] = Send
 	BotCommands["vote"] = Vote
@@ -68,15 +82,44 @@ func NewBot(username string) (*Bot, error) {
 	}, nil
 }
 
-// Balance returns the users balance.
+// Balance returns the user's balance or a set of users.
 func Balance(bot *Bot, message irc.Message) {
 	username := message.Prefix.User
-	iban := bot.Management.Ledger.Users[username]
+	users := make([]string, 0)
 
-	if block := bot.Management.Ledger.LatestBlock(iban); block != nil {
-		balance := block.Balance()
-		// TODO: Whisper the user with their balance.
+	for _, param := range message.Params {
+		matches := BalanceRegExp.FindStringSubmatch(param)
+
+		if matches == nil || len(matches) < 1 {
+			continue
+		}
+
+		users = strings.Fields(matches[1])
+		break
 	}
+
+	if len(users) == 0 {
+		users = append(users, username)
+	}
+
+	// Respond with a whisper to the user who requested the balance(s).
+	buffer := bytes.NewBufferString("/w ")
+	buffer.WriteString(username)
+	buffer.WriteByte(' ')
+
+	for _, user := range users {
+		iban := bot.Management.Ledger.Users[user]
+
+		if block := bot.Management.Ledger.LatestBlock(iban); block != nil {
+			balance := block.Balance()
+			buffer.WriteString(user)
+			buffer.WriteByte('(')
+			buffer.WriteString(balance.Text('f', -1))
+			buffer.WriteString(") ")
+		}
+	}
+
+	bot.Session.Write(buffer.String())
 }
 
 // ClearChat is the handler for the CLEARCHAT command sent from IRC.
@@ -125,12 +168,12 @@ func Send(bot *Bot, message irc.Message) {
 	for _, param := range message.Params {
 		matches := SendRegExp.FindStringSubmatch(param)
 
-		if len(matches) < 3 {
+		if matches == nil || len(matches) < 2 {
 			continue
 		}
 
-		receiver := matches[2]
-		amount, err := strconv.Atoi(matches[3])
+		receiver := matches[1]
+		amount, err := strconv.Atoi(matches[2])
 
 		if err != nil {
 			log.Println(err)
@@ -152,7 +195,28 @@ func Send(bot *Bot, message irc.Message) {
 }
 
 // Vote handles a user's choice to add or remove delegates.
-func Vote(bot *Bot, message irc.Message) {}
+func Vote(bot *Bot, message irc.Message) {
+	username := message.Prefix.User
+
+	for _, param := range message.Params {
+		matches := VoteRegExp.FindStringSubmatch(param)
+
+		if matches == nil || len(matches) < 1 {
+			continue
+		}
+
+		delegates := strings.Fields(matches[1])
+		iban := bot.Management.Ledger.Users[username]
+		account := bot.Management.Ledger.Accounts[iban.String()]
+
+		if err := bot.Management.DPoS.Elect(account, delegates, bot.Management.Ledger, bot.Management.Node); err != nil {
+			log.Println(err)
+			continue
+		}
+
+		break
+	}
+}
 
 // Cap sends a request for the given capabilities.
 // Default capabilities are used if none are given.
@@ -230,7 +294,7 @@ func (b *Bot) ParseCommand(message irc.Message) {
 	for _, param := range message.Params {
 		matches := CommandRegExp.FindStringSubmatch(param)
 
-		if len(matches) < 1 {
+		if matches == nil || len(matches) < 1 {
 			continue
 		}
 
