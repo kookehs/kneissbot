@@ -3,7 +3,6 @@ package core
 import (
 	"log"
 	"math"
-	"time"
 
 	watchmen "github.com/kookehs/watchmen/core"
 )
@@ -11,14 +10,10 @@ import (
 // DefaultModerators is the default number of moderators.
 const DefaultModerators = 3
 
-// UpdateInterval is the time in seconds for an update to trigger.
-var UpdateInterval time.Duration = 60
-
 // Management handles logic related to dynamically managing moderators.
 type Management struct {
 	// Management variables
 	MovingAverage *MovingAverage
-	Timer         *time.Timer
 
 	// Twitch related variables
 	Bans       int
@@ -56,7 +51,6 @@ func NewManagement(username string) *Management {
 		Moderators:    DefaultModerators,
 		MovingAverage: ma,
 		Node:          node,
-		Timer:         time.NewTimer(UpdateInterval * time.Second),
 	}
 }
 
@@ -114,16 +108,13 @@ func (m *Management) Score() float64 {
 }
 
 // Update updates variables and resets counters.
-// Update should be called as a goroutine.
 func (m *Management) Update() {
-	for {
-		<-m.Timer.C
-		m.Moderators = m.Heuristic()
-		log.Printf("[Management]: Messages - %v, Bans - %v, Timeouts - %v", m.Messages, m.Bans, m.Timeouts)
-		log.Printf("[Management]: Mods - %v", m.Moderators)
-		m.Bans = 0
-		m.Messages = 0
-		m.Timeouts = 0
-		m.Timer.Reset(UpdateInterval * time.Second)
-	}
+	m.Moderators = m.Heuristic()
+	watchmen.MaxForgers = m.Moderators
+	log.Printf("[Management]: Messages - %v, Bans - %v, Timeouts - %v", m.Messages, m.Bans, m.Timeouts)
+	log.Printf("[Management]: Mods - %v", m.Moderators)
+
+	m.Bans = 0
+	m.Messages = 0
+	m.Timeouts = 0
 }

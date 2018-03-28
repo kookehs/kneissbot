@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/kookehs/kneissbot/net/irc"
@@ -14,14 +15,15 @@ import (
 )
 
 // TODO: Blacklist of users (never moderator)
-// TODO: Whitelist of users (always moderator?)
-// TODO: Handle making people moderators / not moderators
+// TODO: Whitelist of users (always moderator)
 
 const (
 	// BalanceFormat defines the search pattern for retrieving users' balances.
 	BalanceFormat = `!balance ((?:\w+ ?)*)`
 	// CommandFormat defines the search pattern for a command.
 	CommandFormat = `!(\w+)`
+	// ModeratorFormat defines the search pattern for a list of moderators.
+	ModeratorFormat = `The moderators of this channel are: ((?:\w+(?:, )?)+)`
 	// SendFormat defines the search pattern for sending funds to another user.
 	SendFormat = `!send (\w+) (\d+)`
 	// VoteFormat defines the search pattern for voting for delegates.
@@ -33,6 +35,8 @@ var (
 	BalanceRegExp = regexp.MustCompile(BalanceFormat)
 	// CommandRegExp is the regular expression used to find commands.
 	CommandRegExp = regexp.MustCompile(CommandFormat)
+	// ModeratorRegExp is the regular expression used to find moderators.
+	ModeratorRegExp = regexp.MustCompile(ModeratorFormat)
 	// SendRegExp is the regular expression used to find the receiver.
 	SendRegExp = regexp.MustCompile(SendFormat)
 	// VoteRegExp is the regular expression used to find the delegates elected.
@@ -42,6 +46,9 @@ var (
 	BotCommands = make(map[string]func(*Bot, irc.Message))
 	// TwitchCommands is a mapping of strings to functions related to IRC.
 	TwitchCommands = make(map[string]func(*Bot, irc.Message))
+
+	// UpdateInterval is the time in seconds for an update to trigger.
+	UpdateInterval time.Duration = 60
 )
 
 func init() {
@@ -53,6 +60,7 @@ func init() {
 	TwitchCommands["CLEARCHAT"] = ClearChat
 	TwitchCommands[irc.RPL_ENDOFMOTD] = EndOfMOTD
 	TwitchCommands[irc.RPL_ENDOFNAMES] = EndOfNames
+	TwitchCommands["NOTICE"] = Notice
 	TwitchCommands["PING"] = Ping
 	TwitchCommands["PRIVMSG"] = PrivMSG
 
@@ -62,9 +70,11 @@ func init() {
 
 // Bot contains logic realted to both the API and IRC.
 type Bot struct {
-	Event      chan string
+	Channel    string
+	Event      chan irc.Message
 	Management *Management
 	Session    *irc.Session
+	Timer      *time.Timer
 }
 
 // NewBot returns a pointer to an initialized Bot struct.
@@ -76,9 +86,11 @@ func NewBot(username string) (*Bot, error) {
 	}
 
 	return &Bot{
-		Event:      make(chan string),
+		Channel:    username,
+		Event:      make(chan irc.Message),
 		Management: NewManagement(username),
 		Session:    session,
+		Timer:      time.NewTimer(UpdateInterval * time.Second),
 	}, nil
 }
 
@@ -119,7 +131,7 @@ func Balance(bot *Bot, message irc.Message) {
 		}
 	}
 
-	bot.Session.Write(buffer.String())
+	bot.PrivMSG(buffer.String())
 }
 
 // ClearChat is the handler for the CLEARCHAT command sent from IRC.
@@ -133,12 +145,17 @@ func ClearChat(bot *Bot, message irc.Message) {
 
 // EndOfMOTD is the handler for the ENDOFMOTD command sent from IRC.
 func EndOfMOTD(bot *Bot, message irc.Message) {
-	bot.Event <- message.Command
+	bot.Event <- message
 }
 
 // EndOfNames is the handler for the ENDOFNAMES command sent from IRC.
 func EndOfNames(bot *Bot, message irc.Message) {
-	bot.Event <- message.Command
+	bot.Event <- message
+}
+
+// Notice is the handler for the NOTICE command sent from IRC.
+func Notice(bot *Bot, message irc.Message) {
+	bot.Event <- message
 }
 
 // Ping is the handler for the PING command sent from IRC.
@@ -218,6 +235,51 @@ func Vote(bot *Bot, message irc.Message) {
 	}
 }
 
+// Amend makes changes to the current set of moderators.
+func (b *Bot) Amend(moderators []string) {
+	// Retrieve current list of moderators.
+	b.PrivMSG("/mods")
+	message := <-b.Event
+	id, ok := message.Tags["msg-id"]
+
+	if !ok || strings.Compare(id, "room_mods") != 0 {
+		return
+	}
+
+	// A mapping of users to mod or unmod.
+	amendment := make(map[string]bool)
+
+	for _, moderator := range moderators {
+		amendment[moderator] = true
+	}
+
+	for _, param := range message.Params {
+		matches := ModeratorRegExp.FindStringSubmatch(param)
+
+		if matches == nil || len(matches) < 1 {
+			continue
+		}
+
+		mods := strings.Split(param, ", ")
+
+		for _, mod := range mods {
+			if _, exist := amendment[mod]; !exist {
+				amendment[mod] = false
+			}
+		}
+
+		break
+	}
+
+	for moderator, operator := range amendment {
+		if operator {
+			b.PrivMSG("/mod " + moderator)
+		} else {
+			b.PrivMSG("/unmod" + moderator)
+		}
+	}
+}
+
 // Cap sends a request for the given capabilities.
 // Default capabilities are used if none are given.
 func (b *Bot) Cap(capabilities []string) {
@@ -254,9 +316,9 @@ func (b *Bot) Connect(nick, token string) bool {
 	b.Session.Write("NICK " + nick)
 
 	// Wait until we receive end of MOTD.
-	event := <-b.Event
+	message := <-b.Event
 
-	switch event {
+	switch message.Command {
 	case irc.RPL_ENDOFMOTD:
 		return true
 	}
@@ -279,9 +341,9 @@ func (b *Bot) Join(channel string) bool {
 	b.Session.Write("JOIN #" + channel)
 
 	// Wait until we receive end of names.
-	event := <-b.Event
+	message := <-b.Event
 
-	switch event {
+	switch message.Command {
 	case irc.RPL_ENDOFNAMES:
 		return true
 	}
@@ -313,13 +375,31 @@ func (b *Bot) Part(channel string) {
 	b.Session.Write("PART #" + channel)
 }
 
-// PrivMSG sends a private message to the given channel.
-func (b *Bot) PrivMSG(channel, message string) {
-	b.Session.Write("PRIVMSG #" + channel + " :" + message)
+// PrivMSG sends a private message.
+func (b *Bot) PrivMSG(message string) {
+	b.Session.Write("PRIVMSG #" + b.Channel + " :" + message)
 }
 
 // Start creates additional goroutines for reading from the IRC server.
 func (b *Bot) Start() {
-	go b.Management.Update()
+	go b.Update()
 	go b.Session.Listen(b)
+}
+
+// Update calls nested update functions and applies changes to moderators.
+func (b *Bot) Update() {
+	for {
+		<-b.Timer.C
+		b.Management.Update()
+		moderators := make([]string, 0)
+
+		for _, moderator := range b.Management.DPoS.Round.Forgers {
+			account := moderator.Account
+			username := b.Management.Ledger.Username(account.IBAN)
+			moderators = append(moderators, username)
+		}
+
+		b.Amend(moderators)
+		b.Timer.Reset(UpdateInterval * time.Second)
+	}
 }
