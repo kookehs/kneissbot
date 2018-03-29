@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"os"
 
-	"github.com/kookehs/kneissbot/api/twitch"
 	"github.com/kookehs/kneissbot/core"
 	"github.com/kookehs/kneissbot/net/server"
 )
@@ -21,19 +20,7 @@ func main() {
 
 	defer twitchAuth.Close()
 	token := <-output
-	api := twitch.NewAPI(token)
-	response, err := api.ValidToken()
-
-	if err != nil || !response.Token.Valid {
-		if !response.Token.Valid {
-			panic("Invalid token")
-		}
-
-		panic(err)
-	}
-
-	username := response.Token.Username
-	bot, err := core.NewBot(username)
+	bot, err := core.NewBot(token)
 
 	if err != nil {
 		panic(err)
@@ -42,10 +29,11 @@ func main() {
 	defer bot.Close()
 	bot.Start()
 
-	if ok := bot.Connect(username, token); !ok {
+	if ok := bot.Connect(); !ok {
 		panic("Unable to connect to IRC")
 	}
 
+	// TODO: Remove test code
 	reader := bufio.NewReader(os.Stdin)
 	channel, err := reader.ReadString('\n')
 

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -81,6 +80,23 @@ func (a *API) Get(url string) ([]byte, error) {
 	return body, nil
 }
 
+// GetChatters returns a ChattersResponse for the given channel.
+func (a *API) GetChatters(channel string) (*ChattersResponse, error) {
+	body, err := a.Get("http://tmi.twitch.tv/group/user/" + channel + "/chatters")
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(ChattersResponse)
+
+	if err = json.Unmarshal(body, resp); err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
 // GetUsers returns a UserResponse with the supplied arguments.
 // If no arguments are given, then the user to which the access
 // token belongs to is returned.
@@ -101,7 +117,6 @@ func (a *API) GetUsers(id, login []string) (*UsersResponse, error) {
 		return nil, err
 	}
 
-	log.Println(string(body))
 	resp := new(UsersResponse)
 
 	if err = json.Unmarshal(body, resp); err != nil {

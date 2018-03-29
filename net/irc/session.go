@@ -27,6 +27,11 @@ var (
 	MaxMessageSize = 512
 )
 
+// Handler is an interface which should handle incoming messages.
+type Handler interface {
+	In(input []byte)
+}
+
 // Session contains variables required to interact with the IRC server
 // over a websocket connection.
 type Session struct {

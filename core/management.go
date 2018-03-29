@@ -28,11 +28,11 @@ type Management struct {
 }
 
 // NewManagement creates and initializes a new Management.
-func NewManagement(username string) *Management {
+func NewManagement(bot *Bot, username string) *Management {
 	dpos := watchmen.NewDPoS()
 	ledger := watchmen.NewLedger()
 	ma := NewMovingAverage(10)
-	node := watchmen.NewNode(dpos, ledger)
+	node := watchmen.NewNode(dpos, ledger, bot)
 
 	// TOOD: Figure out distribution model.
 	// NOTE: Distribute balance of genesis delegates.

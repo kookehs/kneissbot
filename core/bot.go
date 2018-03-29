@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"errors"
 	"log"
 	"regexp"
 	"strconv"
@@ -9,13 +10,14 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/kookehs/kneissbot/net/api/twitch"
 	"github.com/kookehs/kneissbot/net/irc"
-	"github.com/kookehs/kneissbot/net/irc/twitch"
 	"github.com/kookehs/watchmen/primitives"
 )
 
 // TODO: Blacklist of users (never moderator)
 // TODO: Whitelist of users (always moderator)
+// TODO: Provide uptime statistics of delegates
 
 const (
 	// BalanceFormat defines the search pattern for retrieving users' balances.
@@ -70,28 +72,42 @@ func init() {
 
 // Bot contains logic realted to both the API and IRC.
 type Bot struct {
+	API        *twitch.API
 	Channel    string
 	Event      chan irc.Message
 	Management *Management
 	Session    *irc.Session
 	Timer      *time.Timer
+	Token      string
 }
 
 // NewBot returns a pointer to an initialized Bot struct.
-func NewBot(username string) (*Bot, error) {
+func NewBot(token string) (*Bot, error) {
+	bot := new(Bot)
 	session, err := irc.NewSession(twitch.Origin, twitch.IRC)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &Bot{
-		Channel:    username,
-		Event:      make(chan irc.Message),
-		Management: NewManagement(username),
-		Session:    session,
-		Timer:      time.NewTimer(UpdateInterval * time.Second),
-	}, nil
+	bot.API = twitch.NewAPI(token)
+	response, err := bot.API.ValidToken()
+
+	if err != nil || !response.Token.Valid {
+		if !response.Token.Valid {
+			return nil, errors.New("Invalid token")
+		}
+
+		return nil, err
+	}
+
+	bot.Channel = response.Token.Username
+	bot.Event = make(chan irc.Message)
+	bot.Management = NewManagement(bot, bot.Channel)
+	bot.Session = session
+	bot.Timer = time.NewTimer(UpdateInterval * time.Second)
+	bot.Token = token
+	return bot, nil
 }
 
 // Balance returns the user's balance or a set of users.
@@ -280,6 +296,48 @@ func (b *Bot) Amend(moderators []string) {
 	}
 }
 
+// Available returns whether or not the given user is online.
+func (b *Bot) Available(username string) bool {
+	resp, err := b.API.GetChatters(b.Channel)
+
+	if err != nil {
+		log.Println(err)
+		return false
+	}
+
+	for _, admin := range resp.Chatters.Admins {
+		if strings.Compare(username, admin) == 0 {
+			return true
+		}
+	}
+
+	for _, mod := range resp.Chatters.GlobalMods {
+		if strings.Compare(username, mod) == 0 {
+			return true
+		}
+	}
+
+	for _, mod := range resp.Chatters.Moderators {
+		if strings.Compare(username, mod) == 0 {
+			return true
+		}
+	}
+
+	for _, staff := range resp.Chatters.Staff {
+		if strings.Compare(username, staff) == 0 {
+			return true
+		}
+	}
+
+	for _, viewer := range resp.Chatters.Viewers {
+		if strings.Compare(username, viewer) == 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Cap sends a request for the given capabilities.
 // Default capabilities are used if none are given.
 func (b *Bot) Cap(capabilities []string) {
@@ -311,9 +369,9 @@ func (b *Bot) Close() error {
 
 // Connect sends the given credentials to the IRC server for authentication.
 // The blocking operation returns whether connecting to IRC server was successful
-func (b *Bot) Connect(nick, token string) bool {
-	b.Session.Write("PASS oauth:" + token)
-	b.Session.Write("NICK " + nick)
+func (b *Bot) Connect() bool {
+	b.Session.Write("PASS oauth:" + b.Token)
+	b.Session.Write("NICK " + b.Channel)
 
 	// Wait until we receive end of MOTD.
 	message := <-b.Event
