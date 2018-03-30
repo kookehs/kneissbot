@@ -16,6 +16,6 @@ func OpenBrowser(url string) error {
 	case "windows":
 		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
 	default:
-		return errors.New("unsupported GOOS")
+		return errors.New("Unsupported GOOS")
 	}
 }

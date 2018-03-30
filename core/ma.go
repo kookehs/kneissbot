@@ -1,5 +1,11 @@
 package core
 
+import (
+	"encoding/gob"
+	"encoding/json"
+	"io"
+)
+
 // TODO: Store values at certain tick intervals and calculate values for a period.
 
 // MovingAverage contains logic related to a moving average.
@@ -104,4 +110,28 @@ func (ma *MovingAverage) Update() (float64, float64, bool) {
 	}
 
 	return sma, ema, crossed
+}
+
+// Deserialize decodes byte data encoded by gob.
+func (ma *MovingAverage) Deserialize(r io.Reader) error {
+	decoder := gob.NewDecoder(r)
+	return decoder.Decode(ma)
+}
+
+// DeserializeJSON decodes JSON data.
+func (ma *MovingAverage) DeserializeJSON(r io.Reader) error {
+	decoder := json.NewDecoder(r)
+	return decoder.Decode(ma)
+}
+
+// Serialize encodes to byte data using gob.
+func (ma *MovingAverage) Serialize(w io.Writer) error {
+	encoder := gob.NewEncoder(w)
+	return encoder.Encode(ma)
+}
+
+// SerializeJSON encodes to JSON data.
+func (ma *MovingAverage) SerializeJSON(w io.Writer) error {
+	encoder := json.NewEncoder(w)
+	return encoder.Encode(ma)
 }

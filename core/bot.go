@@ -1,9 +1,11 @@
 package core
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"log"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -73,12 +75,11 @@ func init() {
 // Bot contains logic realted to both the API and IRC.
 type Bot struct {
 	API        *twitch.API
-	Channel    string
+	Config     *Config
 	Event      chan irc.Message
 	Management *Management
 	Session    *irc.Session
 	Timer      *time.Timer
-	Token      string
 }
 
 // NewBot returns a pointer to an initialized Bot struct.
@@ -101,12 +102,23 @@ func NewBot(token string) (*Bot, error) {
 		return nil, err
 	}
 
-	bot.Channel = response.Token.Username
+	bot.Config = NewConfig()
+	home, err := Home()
+
+	if err != nil {
+		return nil, err
+	}
+
+	bot.Config.Files["config"] = home + "/.kneissbot/config.bin"
+	bot.Config.Files["ledger"] = home + "/.kneissbot/ledger.bin"
+	bot.Config.Files["ma"] = home + "/.kneissbot/ma.bin"
+
+	bot.Config.Twitch.Username = response.Token.Username
 	bot.Event = make(chan irc.Message)
-	bot.Management = NewManagement(bot, bot.Channel)
+	bot.Management = NewManagement(bot, bot.Config.Twitch.Username)
 	bot.Session = session
 	bot.Timer = time.NewTimer(UpdateInterval * time.Second)
-	bot.Token = token
+	bot.Config.Twitch.AccessToken = token
 	return bot, nil
 }
 
@@ -298,7 +310,7 @@ func (b *Bot) Amend(moderators []string) {
 
 // Available returns whether or not the given user is online.
 func (b *Bot) Available(username string) bool {
-	resp, err := b.API.GetChatters(b.Channel)
+	resp, err := b.API.GetChatters(b.Config.Twitch.Username)
 
 	if err != nil {
 		log.Println(err)
@@ -370,8 +382,8 @@ func (b *Bot) Close() error {
 // Connect sends the given credentials to the IRC server for authentication.
 // The blocking operation returns whether connecting to IRC server was successful
 func (b *Bot) Connect() bool {
-	b.Session.Write("PASS oauth:" + b.Token)
-	b.Session.Write("NICK " + b.Channel)
+	b.Session.Write("PASS oauth:" + b.Config.Twitch.AccessToken)
+	b.Session.Write("NICK " + b.Config.Twitch.Username)
 
 	// Wait until we receive end of MOTD.
 	message := <-b.Event
@@ -435,7 +447,28 @@ func (b *Bot) Part(channel string) {
 
 // PrivMSG sends a private message.
 func (b *Bot) PrivMSG(message string) {
-	b.Session.Write("PRIVMSG #" + b.Channel + " :" + message)
+	b.Session.Write("PRIVMSG #" + b.Config.Twitch.Username + " :" + message)
+}
+
+// Serialize stores state information of the bot to disk in byte data.
+func (b *Bot) Serialize() {
+	// TODO: Serialize state information.
+	configPath := b.Config.Files["config"]
+	configFile, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0666)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer configFile.Close()
+	writer := bufio.NewWriter(configFile)
+	b.Config.Serialize(writer)
+
+	b.Config.Files["ledger"]
+	b.Management.Ledger.Serialize()
+
+	b.Config.Files["ma"]
+	b.Management.MovingAverage.Serialize()
 }
 
 // Start creates additional goroutines for reading from the IRC server.
