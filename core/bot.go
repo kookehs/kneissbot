@@ -19,7 +19,7 @@ import (
 
 // TODO: Blacklist of users (never moderator)
 // TODO: Whitelist of users (always moderator)
-// TODO: Provide uptime statistics of delegates
+// TODO: Provide uptime and share statistics of delegates
 
 const (
 	// BalanceFormat defines the search pattern for retrieving users' balances.
@@ -109,9 +109,19 @@ func NewBot(token string) (*Bot, error) {
 		return nil, err
 	}
 
-	bot.Config.Files["config"] = home + "/.kneissbot/config.bin"
-	bot.Config.Files["ledger"] = home + "/.kneissbot/ledger.bin"
-	bot.Config.Files["ma"] = home + "/.kneissbot/ma.bin"
+	path := home + "/.kneissbot"
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		err = os.MkdirAll(path, os.ModeDir)
+
+		if err != nil {
+			log.Println(err)
+		}
+	}
+
+	bot.Config.Files["config"] = path + "/config.bin"
+	bot.Config.Files["ledger"] = path + "/ledger.bin"
+	bot.Config.Files["ma"] = path + "/ma.bin"
 
 	bot.Config.Twitch.Username = response.Token.Username
 	bot.Event = make(chan irc.Message)
@@ -168,6 +178,36 @@ func ClearChat(bot *Bot, message irc.Message) {
 		bot.Management.Bans++
 	} else {
 		bot.Management.Timeouts++
+	}
+}
+
+// Deserialize retrieves state information of the bot from disk.
+func (b *Bot) Deserialize() {
+	configPath := b.Config.Files["config"]
+	configFile, err := os.OpenFile(configPath, os.O_RDONLY, 0666)
+
+	if err == nil {
+		defer configFile.Close()
+		reader := bufio.NewReader(configFile)
+		b.Config.Deserialize(reader)
+	}
+
+	ledgerPath := b.Config.Files["ledger"]
+	ledgerFile, err := os.OpenFile(ledgerPath, os.O_RDONLY, 0666)
+
+	if err == nil {
+		defer ledgerFile.Close()
+		reader := bufio.NewReader(ledgerFile)
+		b.Management.Ledger.Deserialize(reader)
+	}
+
+	maPath := b.Config.Files["ma"]
+	maFile, err := os.OpenFile(maPath, os.O_RDONLY, 0666)
+
+	if err == nil {
+		defer maFile.Close()
+		reader := bufio.NewReader(maFile)
+		b.Management.MovingAverage.Deserialize(reader)
 	}
 }
 
@@ -288,7 +328,7 @@ func (b *Bot) Amend(moderators []string) {
 			continue
 		}
 
-		mods := strings.Split(param, ", ")
+		mods := strings.Split(matches[1], ", ")
 
 		for _, mod := range mods {
 			if _, exist := amendment[mod]; !exist {
@@ -303,7 +343,7 @@ func (b *Bot) Amend(moderators []string) {
 		if operator {
 			b.PrivMSG("/mod " + moderator)
 		} else {
-			b.PrivMSG("/unmod" + moderator)
+			b.PrivMSG("/unmod " + moderator)
 		}
 	}
 }
@@ -452,9 +492,8 @@ func (b *Bot) PrivMSG(message string) {
 
 // Serialize stores state information of the bot to disk in byte data.
 func (b *Bot) Serialize() {
-	// TODO: Serialize state information.
 	configPath := b.Config.Files["config"]
-	configFile, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0666)
+	configFile, err := os.OpenFile(configPath, os.O_CREATE|os.O_WRONLY, 0666)
 
 	if err != nil {
 		panic(err)
@@ -463,12 +502,31 @@ func (b *Bot) Serialize() {
 	defer configFile.Close()
 	writer := bufio.NewWriter(configFile)
 	b.Config.Serialize(writer)
+	writer.Flush()
 
-	b.Config.Files["ledger"]
-	b.Management.Ledger.Serialize()
+	ledgerPath := b.Config.Files["ledger"]
+	ledgerFile, err := os.OpenFile(ledgerPath, os.O_CREATE|os.O_WRONLY, 0666)
 
-	b.Config.Files["ma"]
-	b.Management.MovingAverage.Serialize()
+	if err != nil {
+		panic(err)
+	}
+
+	defer ledgerFile.Close()
+	writer = bufio.NewWriter(ledgerFile)
+	b.Management.Ledger.Serialize(writer)
+	writer.Flush()
+
+	maPath := b.Config.Files["ma"]
+	maFile, err := os.OpenFile(maPath, os.O_CREATE|os.O_WRONLY, 0666)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer maFile.Close()
+	writer = bufio.NewWriter(maFile)
+	b.Management.MovingAverage.Serialize(writer)
+	writer.Flush()
 }
 
 // Start creates additional goroutines for reading from the IRC server.
@@ -491,6 +549,7 @@ func (b *Bot) Update() {
 		}
 
 		b.Amend(moderators)
+		b.Serialize()
 		b.Timer.Reset(UpdateInterval * time.Second)
 	}
 }
