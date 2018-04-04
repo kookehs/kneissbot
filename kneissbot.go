@@ -5,22 +5,10 @@ import (
 	"os"
 
 	"github.com/kookehs/kneissbot/core"
-	"github.com/kookehs/kneissbot/net/server"
 )
 
 func main() {
-	output := make(chan string)
-	defer close(output)
-	twitchAuth := server.NewTwitchAuth(output)
-	go twitchAuth.ListenAndServe()
-
-	if err := twitchAuth.Authenticate(); err != nil {
-		panic(err)
-	}
-
-	defer twitchAuth.Close()
-	token := <-output
-	bot, err := core.NewBot(token)
+	bot, err := core.NewBot()
 
 	if err != nil {
 		panic(err)

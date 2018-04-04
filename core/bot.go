@@ -14,6 +14,7 @@ import (
 
 	"github.com/kookehs/kneissbot/net/api/twitch"
 	"github.com/kookehs/kneissbot/net/irc"
+	"github.com/kookehs/kneissbot/net/server"
 	"github.com/kookehs/watchmen/primitives"
 )
 
@@ -83,22 +84,11 @@ type Bot struct {
 }
 
 // NewBot returns a pointer to an initialized Bot struct.
-func NewBot(token string) (*Bot, error) {
+func NewBot() (*Bot, error) {
 	bot := new(Bot)
 	session, err := irc.NewSession(twitch.Origin, twitch.IRC)
 
 	if err != nil {
-		return nil, err
-	}
-
-	bot.API = twitch.NewAPI(token)
-	response, err := bot.API.ValidToken()
-
-	if err != nil || !response.Token.Valid {
-		if !response.Token.Valid {
-			return nil, errors.New("Invalid token")
-		}
-
 		return nil, err
 	}
 
@@ -123,12 +113,40 @@ func NewBot(token string) (*Bot, error) {
 	bot.Config.Files["ledger"] = path + "/ledger.bin"
 	bot.Config.Files["ma"] = path + "/ma.bin"
 
-	bot.Config.Twitch.Username = response.Token.Username
 	bot.Event = make(chan irc.Message)
 	bot.Management = NewManagement(bot, bot.Config.Twitch.Username)
 	bot.Session = session
 	bot.Timer = time.NewTimer(UpdateInterval * time.Second)
-	bot.Config.Twitch.AccessToken = token
+
+	if _, err := os.Stat(bot.Config.Files["config"]); os.IsNotExist(err) {
+		output := make(chan string)
+		defer close(output)
+		twitchAuth := server.NewTwitchAuth(output)
+		go twitchAuth.ListenAndServe()
+
+		if err := twitchAuth.Authenticate(); err != nil {
+			panic(err)
+		}
+
+		defer twitchAuth.Close()
+		bot.Config.Twitch.AccessToken = <-output
+	} else {
+		bot.Deserialize()
+		log.Println(bot.Config.Twitch.AccessToken)
+	}
+
+	bot.API = twitch.NewAPI(bot.Config.Twitch.AccessToken)
+	response, err := bot.API.ValidToken()
+
+	if err != nil || !response.Token.Valid {
+		if !response.Token.Valid {
+			return nil, errors.New("Invalid token")
+		}
+
+		return nil, err
+	}
+
+	bot.Config.Twitch.Username = response.Token.Username
 	return bot, nil
 }
 
@@ -492,6 +510,7 @@ func (b *Bot) PrivMSG(message string) {
 
 // Serialize stores state information of the bot to disk in byte data.
 func (b *Bot) Serialize() {
+	// TODO: Encrypt data.
 	configPath := b.Config.Files["config"]
 	configFile, err := os.OpenFile(configPath, os.O_CREATE|os.O_WRONLY, 0666)
 
